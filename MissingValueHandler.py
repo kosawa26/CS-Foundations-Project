@@ -27,8 +27,8 @@ class MissingValueHandler:
     Determins the thresold of important features
 
     simple_impute_method : string, callable or None, default='median'
-    If ``mean``, the imputation for non important features will use the mean of the features.
-    If ``median``, the imputation for non important features will use the median of the features.
+    If ``mean``, the imputation for unimportant features will use the mean of the features.
+    If ``median``, the imputation for unimportant features will use the median of the features.
 
     clf_miss : estimator object, default=LGBMClassifier().
     This object is assumed to implement the sciki-learn estimator api.
@@ -110,7 +110,7 @@ class MissingValueHandler:
         self.missforest = MissForest(self.classifier_miss, self.regressor_miss,
                                      self.initial_guess_miss, self.max_iter_miss)
         self.important_features = []
-        self.non_important_features = []
+        self.unimportant_features = []
         self._simple_imputation = {}
         self._obs_row = None
         self._mappings = {}
@@ -262,7 +262,7 @@ class MissingValueHandler:
     def _get_simple_impute_values(self, X, less_important_features, categorical):
         """
         Class method '_get_simple_impute_values' calculate the imputation values
-        of each non-important features.
+        of each unimportant features.
 
         Parameters
         ----------
@@ -270,7 +270,7 @@ class MissingValueHandler:
         Dataset (features only) that needed to be imputed.
 
         less_important_features : list
-        All non-important features of X.
+        All unimportant features of X.
 
         categorical : list
         All categorical features of X.
@@ -306,7 +306,7 @@ class MissingValueHandler:
         Return
         ------
         X : pd.DataFrame of shape (n_samples, n_features)
-        Imputed Dataset (non-important features only).
+        Imputed Dataset (unimportant features only).
         """
 
         for c in self._simple_imputation:
@@ -374,7 +374,7 @@ class MissingValueHandler:
         Parameters
         ----------
         X : pd.DataFrame of shape (n_samples, n_features)
-        Dataset (features only) that needed to be imputed.
+        Dataset that needed to be imputed.
 
         target : string
         Name of the target feature
@@ -384,8 +384,7 @@ class MissingValueHandler:
 
         Return
         ------
-        X : pd.DataFrame of shape (n_samples, n_features)
-        Reverse label-encoded dataset (features only).
+        None
         """
 
         X = X.copy()
@@ -455,29 +454,35 @@ class MissingValueHandler:
         self._get_obs_row(X)
         self._get_map_and_rev_map(X, self.categorical)
 
+        # get the observations without missing values and encode catogricals
         X_temp = X.loc[self._obs_row]
         X_temp = self._label_encoding(X_temp, self._mappings)
+
+        # split the data into dependent and independent variables
         y_temp = X_temp[target]
         X_temp = X_temp.drop(columns=[target])
 
+        # compute feature importances
         if target in self._mappings:
             estimator = deepcopy(self.classifier)
         else:
             estimator = deepcopy(self.regressor)
-
         feature_importances = estimator.fit(X_temp, y_temp).feature_importances_
         for i in range(len(feature_importances)):
             if feature_importances[i] >= self.importance_threshold:
                 self.important_features.append(X_temp.columns[i])
             else:
-                self.non_important_features.append(X_temp.columns[i])
+                self.unimportant_features.append(X_temp.columns[i])
         
+        # combine dependent and independent variables and reverse encode
         X_temp = pd.concat([y_temp, X_temp], axis=1)
         X_temp = self._rev_label_encoding(X_temp, self._rev_mappings)
 
-        self._get_simple_impute_values(X_temp, self.non_important_features, self.categorical)
+        # get filling values for unimportant features and impute
+        self._get_simple_impute_values(X_temp, self.unimportant_features, self.categorical)
         X_imp = self._simple_imputer(X)
 
+        # pass the imputed data to missforest
         self.missforest.fit(X_imp, categorical)
         self._is_fitted = True
 
@@ -502,6 +507,7 @@ class MissingValueHandler:
 
         X = X.copy()
 
+        # impute missing values in unimportant features
         X_imp = self._simple_imputer(X)
         if X_imp.isnull().sum().sum() != 0:
             X_imp = self.missforest.transform(X_imp)
@@ -516,7 +522,7 @@ class MissingValueHandler:
         Parameters
         ----------
         X : pd.DataFrame of shape (n_samples, n_features)
-        Dataset (features only) that needed to be imputed.
+        Dataset that needed to be imputed.
 
         categorical : list
         All categorical features of X.
@@ -524,7 +530,7 @@ class MissingValueHandler:
         Return
         ------
         X : pd.DataFrame of shape (n_samples, n_features)
-        Imputed dataset (features only).
+        Imputed dataset.
         """
 
         self.fit(X, target, categorical)
