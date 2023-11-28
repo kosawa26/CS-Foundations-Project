@@ -1,6 +1,7 @@
 # MissingValueHandler.py
 
 from copy import deepcopy
+import heapq
 import numpy as np
 import pandas as pd
 from sklearn.ensemble import RandomForestClassifier
@@ -468,11 +469,22 @@ class MissingValueHandler:
         else:
             estimator = deepcopy(self.regressor)
         feature_importances = estimator.fit(X_temp, y_temp).feature_importances_
-        for i in range(len(feature_importances)):
-            if feature_importances[i] >= self.importance_threshold:
-                self.important_features.append(X_temp.columns[i])
-            else:
-                self.unimportant_features.append(X_temp.columns[i])
+
+        # separete the importnat features and unimportant features
+        # at least 2 features will be important features
+        two_largetst_importances = heapq.nlargest(2, feature_importances)
+        if two_largetst_importances[-1] >= self.importance_threshold:
+            for i in range(len(feature_importances)):
+                if feature_importances[i] >= self.importance_threshold:
+                    self.important_features.append(X_temp.columns[i])
+                else:
+                    self.unimportant_features.append(X_temp.columns[i])
+        else:
+            for i in range(len(feature_importances)):
+                if feature_importances[i] in two_largetst_importances:
+                    self.important_features.append(X_temp.columns[i])
+                else:
+                    self.unimportant_features.append(X_temp.columns[i])
         
         # combine dependent and independent variables and reverse encode
         X_temp = pd.concat([y_temp, X_temp], axis=1)
