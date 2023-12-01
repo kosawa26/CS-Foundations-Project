@@ -1,7 +1,6 @@
 # MissingValueHandler.py
 
 from copy import deepcopy
-import heapq
 import numpy as np
 import pandas as pd
 from sklearn.ensemble import RandomForestClassifier
@@ -108,10 +107,9 @@ class MissingValueHandler:
         self.regressor_miss = rgr_miss
         self.initial_guess_miss = initial_guess_miss
         self.max_iter_miss = max_iter_miss
-        self.missforest = MissForest(self.classifier_miss, self.regressor_miss,
-                                     self.initial_guess_miss, self.max_iter_miss)
-        self.important_features = []
-        self.unimportant_features = []
+        self.missforest = None
+        self.important_features = {}
+        self.unimportant_features = {}
         self._simple_imputation = {}
         self._obs_row = None
         self._mappings = {}
@@ -270,7 +268,7 @@ class MissingValueHandler:
         X : pd.DataFrame of shape (n_samples, n_features)
         Dataset (features only) that needed to be imputed.
 
-        less_important_features : list
+        less_important_features : dict_keys
         All unimportant features of X.
 
         categorical : list
@@ -380,7 +378,7 @@ class MissingValueHandler:
         target : string
         Name of the target feature
 
-        categorical : list
+        categorical : list, default=None
         All categorical features of X.
 
         Return
@@ -391,28 +389,12 @@ class MissingValueHandler:
         X = X.copy()
 
         # make sure 'X' is either pandas dataframe, numpy array or list of lists.
-        if (
-                not isinstance(X, pd.DataFrame) and
-                not isinstance(X, np.ndarray) and
-                not (
-                        isinstance(X, list) and
-                        all(isinstance(i, list) for i in X)
-                )
-        ):
-            raise ValueError("Argument 'X' can only be pandas dataframe, numpy"
-                             " array or list of list.")
-
-        # if 'X' is a list of list, convert 'X' into a pandas dataframe.
-        if (
-                isinstance(X, np.ndarray) or
-                (isinstance(X, list) and all(isinstance(i, list) for i in X))
-        ):
-            X = pd.DataFrame(X)
+        if not isinstance(X, pd.DataFrame):
+            raise ValueError("Argument 'X' can only be pandas dataframe.")
 
         # make sure 'target' is str.
         if not isinstance(target, str):
             raise ValueError("Argument 'target' only accept str.")
-
 
         # make sure 'target' is in the features of X.
         if target not in X.columns:
@@ -470,31 +452,29 @@ class MissingValueHandler:
             estimator = deepcopy(self.regressor)
         feature_importances = estimator.fit(X_temp, y_temp).feature_importances_
 
-        # separete the importnat features and unimportant features
+        # separete the important features and unimportant features
         # at least 2 features will be important features
-        two_largetst_importances = heapq.nlargest(2, feature_importances)
-        if two_largetst_importances[-1] >= self.importance_threshold:
-            for i in range(len(feature_importances)):
-                if feature_importances[i] >= self.importance_threshold:
-                    self.important_features.append(X_temp.columns[i])
-                else:
-                    self.unimportant_features.append(X_temp.columns[i])
-        else:
-            for i in range(len(feature_importances)):
-                if feature_importances[i] in two_largetst_importances:
-                    self.important_features.append(X_temp.columns[i])
-                else:
-                    self.unimportant_features.append(X_temp.columns[i])
+        for i in range(len(feature_importances)):
+            if feature_importances[i] >= self.importance_threshold:
+                self.important_features[X_temp.columns[i]] = feature_importances[i]
+            else:
+                self.unimportant_features[X_temp.columns[i]] = feature_importances[i]
         
         # combine dependent and independent variables and reverse encode
         X_temp = pd.concat([y_temp, X_temp], axis=1)
         X_temp = self._rev_label_encoding(X_temp, self._rev_mappings)
 
         # get filling values for unimportant features and impute
-        self._get_simple_impute_values(X_temp, self.unimportant_features, self.categorical)
+        self._get_simple_impute_values(X_temp, self.unimportant_features.keys(), self.categorical)
         X_imp = self._simple_imputer(X)
 
+        # changes max_iter_miss when there is no important feature to avoid error in MissForest
+        if len(self.important_features) == 0:
+            self.max_iter_miss = 1
+
         # pass the imputed data to missforest
+        self.missforest = MissForest(self.classifier_miss, self.regressor_miss,
+                                     self.initial_guess_miss, self.max_iter_miss)
         self.missforest.fit(X_imp, categorical)
         self._is_fitted = True
 
@@ -536,7 +516,10 @@ class MissingValueHandler:
         X : pd.DataFrame of shape (n_samples, n_features)
         Dataset that needed to be imputed.
 
-        categorical : list
+        target : string
+        Name of the target feature
+
+        categorical : list, default=None
         All categorical features of X.
 
         Return
