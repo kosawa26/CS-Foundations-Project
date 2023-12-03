@@ -23,7 +23,7 @@ class MissingValueHandler:
     This object is assumed to implement the sciki-learn estimator api,
     and the class which this object belongs to is assumed to have 'feature_importances_' attribute.
 
-    importance_threshold : float, default=0.5
+    importance_threshold : float, default=0.4
     Determins the thresold of important features
 
     simple_impute_method : string, callable or None, default='median'
@@ -46,7 +46,7 @@ class MissingValueHandler:
     If ``median``, the initial imputation in MissForest will use the median of the features.
     """
     def __init__(self, clf=RandomForestClassifier(), rgr=RandomForestRegressor(),
-                 importance_threshold=0.5, simple_impute_method="median",
+                 importance_threshold=0.4, simple_impute_method="median",
                  clf_miss=LGBMClassifier(), rgr_miss=LGBMRegressor(),
                  max_iter_miss=5, initial_guess_miss="median"):
         # make sure 'clf' is an estimator.
@@ -453,10 +453,13 @@ class MissingValueHandler:
         feature_importances = estimator.fit(X_temp, y_temp).feature_importances_
 
         # separete the important features and unimportant features
-        # at least 2 features will be important features
+        s_feature_importance = pd.Series(data=feature_importances, index=X_temp.columns)
+        s_feature_importance.sort_values(ascending=False, inplace=True)
+        threshold = self.importance_threshold
         for i in range(len(feature_importances)):
-            if feature_importances[i] >= self.importance_threshold:
-                self.important_features[X_temp.columns[i]] = feature_importances[i]
+            if threshold > 0:
+                self.important_features[s_feature_importance.index[i]] = s_feature_importance.iloc[i]
+                threshold -= s_feature_importance.iloc[i]
             else:
                 self.unimportant_features[X_temp.columns[i]] = feature_importances[i]
         
