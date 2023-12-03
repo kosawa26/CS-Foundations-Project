@@ -507,13 +507,8 @@ class MissingValueHandler:
 
         # impute missing values in unimportant features
         X_imp = self._simple_imputer(X)
-        filled_cols = X.columns[X.isnull().sum()==0]  # Get those less important columns that were imputed with mean/median/mode
-        filled_frame = X[filled_cols]                 # Subset the Imputed columns 
-        X_imp = X_imp.dropna(axis=1)                  # Drop the mean/median/mode (unimportant) imputed columns 
         if X_imp.isnull().sum().sum() != 0:              
             X_imp = self.missforest.transform(X_imp)
-        X_all = pd.concat([X_imp,filled_frame],axis=1) # Concat the Missforest imputed and mean/median/mode imputed columns 
-        X_all = X_all[X.columns]                       # Rearrange the columns of Dataframe in the corresponding order 
 
         return X_all
 
