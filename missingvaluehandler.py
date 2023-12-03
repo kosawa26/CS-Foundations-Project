@@ -510,7 +510,7 @@ class MissingValueHandler:
         if X_imp.isnull().sum().sum() != 0:              
             X_imp = self.missforest.transform(X_imp)
 
-        return X_all
+        return X_imp
 
     def fit_transform(self, X, target, categorical=None):
         """
