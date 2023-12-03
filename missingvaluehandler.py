@@ -58,24 +58,24 @@ class MissingValueHandler:
         if not self._has_feature_importances(rgr):
             raise ValueError("Argument 'rgr' only accept estimators that has"
                              " class methods 'fit' and 'predict' and atribute 'feature_importances_'.")
-        
+
         # make sure 'important_features_ratio' is float and between 0 and 1.
         if not isinstance(important_features_ratio, float):
             raise ValueError("Argument 'important_features_ratio' only accept float.")
-        
+
         # make sure 'imporance_thershold' is between 0 and 1.
         if not (0 <= important_features_ratio <= 1):
             raise ValueError("Argument 'important_features_ratio' only accept value between 0 and 1.")
-        
+
         # make sure 'simple_impute_method' is str.
         if not isinstance(simple_impute_method, str):
             raise ValueError("Argument 'simple_impute_method' only accept str.")
-        
+
         # make sure 'simple_impute_method' is either 'median' or 'mean'.
         if simple_impute_method not in ("median", "mean"):
             raise ValueError("Argument 'simple_impute_method' can only be 'median' or"
                              " 'mean'.")
-        
+
         # make sure 'clf_miss' is an estimator.
         if not self._is_estimator(clf_miss):
             raise ValueError("Argument 'clf_miss' only accept estimators that has "
@@ -98,7 +98,7 @@ class MissingValueHandler:
         # make sure 'max_iter_miss' is int.
         if not isinstance(max_iter_miss, int):
             raise ValueError("Argument 'max_iter_miss' only accept int.")
-        
+
         self.classifier = clf
         self.regressor = rgr
         self.important_features_ratio = important_features_ratio
@@ -132,7 +132,7 @@ class MissingValueHandler:
 
         Return
         ------
-        If the argument 'estimator' has class method 'fit' and 'predict' 
+        If the argument 'estimator' has class method 'fit' and 'predict'
         and attribute 'feature_importances_' return True.
 
         Otherwise, return False
@@ -278,7 +278,7 @@ class MissingValueHandler:
         ------
         None
         """
-        
+
         for c in less_important_features:
             if c in categorical:
                 self._simple_imputation[c] = X[c].mode().values[0]
@@ -290,7 +290,7 @@ class MissingValueHandler:
                 else:
                     raise ValueError("Argument 'initial_guess' only accepts "
                                      "'mean' or 'median'.")
-    
+
     def _simple_imputer(self, X):
         """
         Class method '_simple_imputer' imputes the values of features
@@ -312,7 +312,7 @@ class MissingValueHandler:
             X[c].fillna(self._simple_imputation[c], inplace=True)
 
         return X
-                
+
     @staticmethod
     def _label_encoding(X, mappings):
         """
@@ -364,7 +364,7 @@ class MissingValueHandler:
             X[c] = X[c].map(rev_mappings[c])
 
         return X
-    
+
     def fit(self, X, target, categorical=None):
         """
         Class method 'fit' checks if the arguments are valid and initiates
@@ -385,7 +385,7 @@ class MissingValueHandler:
         ------
         None
         """
-
+      
         X = X.copy()
 
         # make sure 'X' is either pandas dataframe, numpy array or list of lists.
@@ -424,7 +424,7 @@ class MissingValueHandler:
         # make sure there is no column with all missing values.
         if np.any(X.isnull().sum() == len(X)):
             raise ValueError("One or more columns have all rows missing.")
-        
+
         if categorical is None:
             categorical_temp = []
         else:
@@ -463,7 +463,7 @@ class MissingValueHandler:
                 self.important_features[s_feature_importances.index[i]] = s_feature_importances.iloc[i]
             else:
                 self.unimportant_features[s_feature_importances.index[i]] = s_feature_importances.iloc[i]
-        
+
         # combine dependent and independent variables and reverse encode
         X_temp = pd.concat([y_temp, X_temp], axis=1)
         X_temp = self._rev_label_encoding(X_temp, self._rev_mappings)
@@ -481,6 +481,8 @@ class MissingValueHandler:
                                      self.initial_guess_miss, self.max_iter_miss)
         self.missforest.fit(X_imp, categorical)
         self._is_fitted = True
+
+  
 
 
     def transform(self, X):
@@ -505,11 +507,16 @@ class MissingValueHandler:
 
         # impute missing values in unimportant features
         X_imp = self._simple_imputer(X)
-        if X_imp.isnull().sum().sum() != 0:
+        filled_cols = X.columns[X.isnull().sum()==0]  # Get those less important columns that were imputed with mean/median/mode
+        filled_frame = X[filled_cols]                 # Subset the Imputed columns 
+        X_imp = X_imp.dropna(axis=1)                  # Drop the mean/median/mode (unimportant) imputed columns 
+        if X_imp.isnull().sum().sum() != 0:              
             X_imp = self.missforest.transform(X_imp)
+        X_all = pd.concat([X_imp,filled_frame],axis=1) # Concat the Missforest imputed and mean/median/mode imputed columns 
+        X_all = X_all[X.columns]                       # Rearrange the columns of Dataframe in the corresponding order 
 
-        return X_imp
-    
+        return X_all
+
     def fit_transform(self, X, target, categorical=None):
         """
         Class method 'fit_transform' calls class method 'fit' and 'transform'
