@@ -461,7 +461,7 @@ class MissingValueHandler:
                 self.important_features[s_feature_importance.index[i]] = s_feature_importance.iloc[i]
                 threshold -= s_feature_importance.iloc[i]
             else:
-                self.unimportant_features[X_temp.columns[i]] = feature_importances[i]
+                self.unimportant_features[s_feature_importance.index[i]] = s_feature_importance.iloc[i]
         
         # combine dependent and independent variables and reverse encode
         X_temp = pd.concat([y_temp, X_temp], axis=1)
