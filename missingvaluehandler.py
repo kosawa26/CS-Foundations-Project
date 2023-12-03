@@ -23,7 +23,7 @@ class MissingValueHandler:
     This object is assumed to implement the sciki-learn estimator api,
     and the class which this object belongs to is assumed to have 'feature_importances_' attribute.
 
-    importance_threshold : float, default=0.4
+    important_features_ratio : float, default=0.4
     Determins the thresold of important features
 
     simple_impute_method : string, callable or None, default='median'
@@ -46,7 +46,7 @@ class MissingValueHandler:
     If ``median``, the initial imputation in MissForest will use the median of the features.
     """
     def __init__(self, clf=RandomForestClassifier(), rgr=RandomForestRegressor(),
-                 importance_threshold=0.4, simple_impute_method="median",
+                 important_features_ratio=0.4, simple_impute_method="median",
                  clf_miss=LGBMClassifier(), rgr_miss=LGBMRegressor(),
                  max_iter_miss=5, initial_guess_miss="median"):
         # make sure 'clf' is an estimator.
@@ -59,13 +59,13 @@ class MissingValueHandler:
             raise ValueError("Argument 'rgr' only accept estimators that has"
                              " class methods 'fit' and 'predict' and atribute 'feature_importances_'.")
         
-        # make sure 'importance_threshold' is float and between 0 and 1.
-        if not isinstance(importance_threshold, float):
-            raise ValueError("Argument 'importance_threshold' only accept float.")
+        # make sure 'important_features_ratio' is float and between 0 and 1.
+        if not isinstance(important_features_ratio, float):
+            raise ValueError("Argument 'important_features_ratio' only accept float.")
         
         # make sure 'imporance_thershold' is between 0 and 1.
-        if not (0 <= importance_threshold <= 1):
-            raise ValueError("Argument 'importance_threshold' only accept value between 0 and 1.")
+        if not (0 <= important_features_ratio <= 1):
+            raise ValueError("Argument 'important_features_ratio' only accept value between 0 and 1.")
         
         # make sure 'simple_impute_method' is str.
         if not isinstance(simple_impute_method, str):
@@ -101,7 +101,7 @@ class MissingValueHandler:
         
         self.classifier = clf
         self.regressor = rgr
-        self.importance_threshold = importance_threshold
+        self.important_features_ratio = important_features_ratio
         self.simple_impute_method = simple_impute_method
         self.classifier_miss = clf_miss
         self.regressor_miss = rgr_miss
@@ -453,15 +453,16 @@ class MissingValueHandler:
         feature_importances = estimator.fit(X_temp, y_temp).feature_importances_
 
         # separete the important features and unimportant features
-        s_feature_importance = pd.Series(data=feature_importances, index=X_temp.columns)
-        s_feature_importance.sort_values(ascending=False, inplace=True)
-        threshold = self.importance_threshold
+        s_feature_importances = pd.Series(data=feature_importances, index=X_temp.columns)
+        s_feature_importances.sort_values(ascending=False, inplace=True)
+        n_important_features = round(len(feature_importances) * self.important_features_ratio)
+        if n_important_features == 0:
+            n_important_features = 1
         for i in range(len(feature_importances)):
-            if threshold > 0:
-                self.important_features[s_feature_importance.index[i]] = s_feature_importance.iloc[i]
-                threshold -= s_feature_importance.iloc[i]
+            if i + 1 <= n_important_features:
+                self.important_features[s_feature_importances.index[i]] = s_feature_importances.iloc[i]
             else:
-                self.unimportant_features[s_feature_importance.index[i]] = s_feature_importance.iloc[i]
+                self.unimportant_features[s_feature_importances.index[i]] = s_feature_importances.iloc[i]
         
         # combine dependent and independent variables and reverse encode
         X_temp = pd.concat([y_temp, X_temp], axis=1)
