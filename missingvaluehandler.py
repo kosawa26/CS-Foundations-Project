@@ -7,8 +7,8 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.ensemble import RandomForestRegressor
 from lightgbm import LGBMClassifier
 from lightgbm import LGBMRegressor
-from missforest.missforest import MissForest
-from missforest.errors import MultipleDataTypesError, NotFittedError
+from missforest import MissForest
+from errors import MultipleDataTypesError, NotFittedError
 
 
 class MissingValueHandler:
@@ -473,7 +473,7 @@ class MissingValueHandler:
         X_imp = self._simple_imputer(X)
 
         # changes max_iter_miss when there is no important feature to avoid error in MissForest
-        if len(self.important_features) == 0:
+        if (X_imp.isnull().sum() > 0).sum() <= 1:
             self.max_iter_miss = 1
 
         # pass the imputed data to missforest
